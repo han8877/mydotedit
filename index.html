@@ -434,8 +434,9 @@
 
     <section class="box" id="boxPv"><h3>미리보기</h3><div class="in">
       <div id="pvMainBox"><canvas class="px" id="pvMain"></canvas></div>
+      <div class="note" id="pvInfo" style="text-align:center;margin-top:6px"></div>
       <div id="pvRow"></div>
-      <div class="row"><label class="tgl"><input type="checkbox" id="pvAnim" checked> 움직이기</label><label class="tgl"><input type="checkbox" id="pvSpin"> 빙글빙글</label><label class="tgl"><input type="checkbox" id="pvPing"> 왕복</label></div>
+      <div class="row"><label class="tgl"><input type="checkbox" id="pvAnim"> 프레임 재생</label><label class="tgl"><input type="checkbox" id="pvSpin"> 빙글빙글</label><label class="tgl"><input type="checkbox" id="pvPing"> 왕복</label></div>
       <div class="row"><span class="muted">속도</span><input type="range" id="pvFps" min="1" max="16" value="6" style="flex:1"><b id="pvFpsV" style="min-width:20px;text-align:right">6</b></div>
       <div class="row"><span class="muted">배경</span><select id="pvBg" style="flex:1"><option value="check">투명 (체크)</option><option value="#ffffff">흰색</option><option value="#e8e4dc">베이지</option><option value="#8fc46a">잔디</option><option value="#2a2530">어둡게</option></select></div>
     </div></section>
@@ -497,13 +498,13 @@ var P=null;                 // 작업 (프로젝트)
 var E={ view:'front', frame:0, layer:0, tool:'pencil', prim:[58,36,54,255], sec:[255,255,255,255], slot:0,
   brush:1, pp:true, dither:false, shapeFill:false, contig:true, merged:false, shade:'dark', mirror:false,
   grid:true, guide:false, onion:false, zoom:8, ox:0, oy:0, hover:null,
-  pvAnim:true, pvSpin:false, pvPing:false, fps:6, pvBg:'check', pal:'office', palDel:false,
+  pvPlay:false, pvSpin:false, pvPing:false, fps:6, pvBg:'check', pal:'office', palDel:false,
   refShow:true, refOp:.4, olColor:'#3a2436', ol8:false };
 var recent=[], myPal=[], undoS=[], redoS=[];
 var sel=null, FL=null, clip=null, S=null;     // 선택 영역, 떠 있는 조각, 복사한 것, 지금 하는 동작
 var refImg=null;
 
-var PREF_KEYS=['theme','prim','sec','brush','pp','dither','shapeFill','contig','merged','shade','mirror','grid','guide','onion','pvAnim','pvSpin','pvPing','fps','pvBg','pal','refShow','refOp','olColor','ol8','tool'];
+var PREF_KEYS=['theme','prim','sec','brush','pp','dither','shapeFill','contig','merged','shade','mirror','grid','guide','onion','pvPlay','pvSpin','pvPing','fps','pvBg','pal','refShow','refOp','olColor','ol8','tool'];
 (function loadPrefs(){
   var p=lsGet('dot.prefs')||{}; PREF_KEYS.forEach(function(k){ if(p[k]!=null) E[k]=p[k]; });
   if(E.tool==='hand') E.tool='pencil';
@@ -1288,7 +1289,7 @@ function sizePreviews(){
   VIEWS.forEach(function(v){ var c=pvCanvases[v.k]; c.width=P.w; c.height=P.h; c.style.width=P.w*s2+'px'; c.style.height=P.h*s2+'px'; });
 }
 function animIndex(n){
-  if(!E.pvAnim||n<2) return null;
+  if(!E.pvPlay||n<2) return null;
   if(E.pvPing&&n>2){ var p=2*n-2, t=tick%p; return t<n?t:p-t; }
   return tick%n;
 }
@@ -1303,16 +1304,18 @@ function drawPreviews(){
   if(!P) return;
   var spinOrder=['front','left','back','right'], mainV=E.pvSpin?spinOrder[spinI%4]:E.view;
   paintPreview($('#pvMain'),mainV);
+  var n=frames(mainV).length, ai=animIndex(n);
+  $('#pvInfo').textContent=(E.pvSpin?VNAME[mainV]+' · ':'')+(ai!=null?'프레임 '+(ai+1)+' / '+n+' 재생 중':(n>1?'프레임 '+(Math.min(E.frame,n-1)+1)+' / '+n:''));
   $('#pvMainBox').style.background=E.pvBg==='check'?'':E.pvBg;
   VIEWS.forEach(function(v){ paintPreview(pvCanvases[v.k],v.k); });
   $$('.pv').forEach(function(d){ d.classList.toggle('on',d.dataset.view===E.view); });
 }
 (function loop(){
   tick++; if(E.pvSpin&&tick%Math.max(1,Math.round(E.fps*0.8))===0) spinI++;
-  if(E.pvAnim||E.pvSpin) drawPreviews();
+  if(E.pvPlay||E.pvSpin) drawPreviews();
   setTimeout(loop,1000/E.fps);
 })();
-bindCheck('#pvAnim','pvAnim',drawPreviews); bindCheck('#pvSpin','pvSpin',drawPreviews); bindCheck('#pvPing','pvPing');
+bindCheck('#pvAnim','pvPlay',drawPreviews); bindCheck('#pvSpin','pvSpin',drawPreviews); bindCheck('#pvPing','pvPing');
 $('#pvFps').value=E.fps; $('#pvFpsV').textContent=E.fps;
 $('#pvFps').oninput=function(){ E.fps=+this.value; $('#pvFpsV').textContent=E.fps; savePrefs(); };
 $('#pvBg').value=E.pvBg; $('#pvBg').onchange=function(){ E.pvBg=this.value; savePrefs(); drawPreviews(); };
