@@ -340,7 +340,7 @@
     <button class="btn ghost" id="bNew" title="새로 만들기"><svg class="i"><use href="#i-new"/></svg><span class="lbl-m">새로</span></button>
     <button class="btn ghost" id="bOpen" title="불러오기 (작업 파일 · 그림)"><svg class="i"><use href="#i-folder"/></svg><span class="lbl-m">불러오기</span></button>
     <button class="btn ghost" id="bSave" title="작업 파일(.json)로 저장 (Ctrl+S)"><svg class="i"><use href="#i-save"/></svg><span class="lbl-m">작업 저장</span></button>
-    <button class="btn ghost" id="bResize" title="캔버스 크기"><svg class="i"><use href="#i-resize"/></svg><span class="lbl-m">크기</span></button>
+    <button class="btn ghost" id="bResize" title="캔버스 크기 보기 · 바꾸기"><svg class="i"><use href="#i-resize"/></svg><span id="sizeLbl">크기</span></button>
     <button class="btn ghost icon" id="bTheme" title="밝게 / 어둡게"><svg class="i"><use href="#i-moon"/></svg></button>
     <button class="btn ghost icon" id="bHelp" title="도움말"><svg class="i"><use href="#i-help"/></svg></button>
     <button class="btn pri" id="bExport"><svg class="i"><use href="#i-download"/></svg>PNG 저장</button>
@@ -1462,13 +1462,29 @@ var toastT=null;
 function toast(s){ var t=$('#toast'); t.textContent=s; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(function(){ t.classList.remove('show'); },2200); }
 
 var SIZE_PRESETS=[[34,50,'캐릭터'],[16,16,''],[16,24,''],[24,32,''],[32,32,''],[32,48,''],[48,48,''],[64,64,''],[64,96,'']];
-function sizeButtons(){ return SIZE_PRESETS.map(function(s){ return '<button class="btn" data-sz="'+s[0]+'x'+s[1]+'">'+s[0]+'×'+s[1]+(s[2]?' '+s[2]:'')+'</button>'; }).join(''); }
-function hookSizeButtons(){ $$('#mbox [data-sz]').forEach(function(b){ b.onclick=function(){ var p=b.dataset.sz.split('x'); $('#szW').value=p[0]; $('#szH').value=p[1]; }; }); }
+// 이모티콘 규격: [그릴 크기 w,h, 저장 크기 w,h] — 정수 배율로 키워져 선명하게 저장된다
+var EMO_SIZES=[
+  ['카카오톡 이모티콘 (360×360)',[[36,36,360,360],[45,45,360,360],[60,60,360,360],[90,90,360,360]]],
+  ['카카오톡 큰 이모티콘',[[54,54,540,540],[54,30,540,300],[30,54,300,540]]],
+  ['네이버 OGQ 스티커 (740×640)',[[37,32,740,640],[74,64,740,640],[148,128,740,640]]],
+  ['LINE 스티커 (370×320)',[[37,32,370,320],[74,64,370,320]]],
+  ['메인 · 탭 이미지 (OGQ · LINE)',[[24,24,240,240],[48,48,240,240],[48,37,96,74]]]];
+function sizeButtons(){
+  var h='<div class="row tight">'+SIZE_PRESETS.map(function(s){ return '<button class="btn sm" data-sz="'+s[0]+'x'+s[1]+'">'+s[0]+'×'+s[1]+(s[2]?' '+s[2]:'')+'</button>'; }).join('')+'</div>';
+  h+='<div class="sub" style="margin-top:16px">이모티콘용 크기 <span class="muted" style="font-weight:500">PNG 저장 때 규격 크기로 선명하게 키워져요</span></div>';
+  EMO_SIZES.forEach(function(g){
+    h+='<div class="note" style="margin-top:10px;color:var(--text2);font-weight:600">'+g[0]+'</div><div class="row tight">'+
+      g[1].map(function(s){ return '<button class="btn sm" data-sz="'+s[0]+'x'+s[1]+'" title="'+s[2]+'×'+s[3]+'로 저장 ('+Math.round(s[2]/s[0])+'배)">'+s[0]+'×'+s[1]+' <span class="muted">→ '+s[2]+'×'+s[3]+'</span></button>'; }).join('')+'</div>';
+  });
+  return h;
+}
+function hookSizeButtons(){ $$('#mbox [data-sz]').forEach(function(b){ b.onclick=function(){ var p=b.dataset.sz.split('x'); $('#szW').value=p[0]; $('#szH').value=p[1];
+  $$('#mbox [data-sz]').forEach(function(x){ x.classList.toggle('on',x===b); }); }; }); }
 $('#bNew').onclick=function(){
   openModal('새로 만들기',
     '<p class="muted">지금 작업은 사라져요. 필요하면 먼저 \'작업 저장\'을 눌러 주세요.</p>'+
     '<div class="row"><label>가로 <input type="number" id="szW" min="1" max="256" value="34"></label><label>세로 <input type="number" id="szH" min="1" max="256" value="50"></label></div>'+
-    '<div class="row">'+sizeButtons()+'</div>'+
+    sizeButtons()+
     '<div class="row"><label>이름 <input type="text" id="szN" value="내 캐릭터"></label></div>',
     [{t:'취소'},{t:'만들기',pri:true,fn:function(){
       var w=clamp(+$('#szW').value|0,1,256), h=clamp(+$('#szH').value|0,1,256);
@@ -1480,7 +1496,7 @@ $('#bResize').onclick=function(){
   var anchor=4;
   openModal('캔버스 크기 바꾸기',
     '<div class="row"><label>가로 <input type="number" id="szW" min="1" max="256" value="'+P.w+'"></label><label>세로 <input type="number" id="szH" min="1" max="256" value="'+P.h+'"></label></div>'+
-    '<div class="row">'+sizeButtons()+'</div>'+
+    sizeButtons()+
     '<div class="row" style="align-items:flex-start"><span class="muted">그림 기준 위치</span><div class="anchor" id="anc">'+[0,1,2,3,4,5,6,7,8].map(function(i){ return '<button class="btn" data-a="'+i+'"></button>'; }).join('')+'</div></div>'+
     '<p class="muted">모든 방향·프레임·레이어에 적용돼요. 작아지면 잘리는 부분은 사라져요.</p>',
     [{t:'취소'},{t:'바꾸기',pri:true,fn:function(){
@@ -1547,37 +1563,129 @@ function saveProject(){ commitFloat(); download(new Blob([JSON.stringify(seriali
 $('#bSave').onclick=saveProject;
 
 // PNG 저장
+// PNG 저장 — 일반 배율 저장 · 이모티콘 규격 저장 (정확한 픽셀 크기, 가운데, 투명)
+var TARGETS=[
+  {k:'',      n:'자유 크기 (배율로 키우기)'},
+  {k:'kakao', n:'카카오톡 이모티콘 · 360×360', w:360,h:360, pad:0},
+  {k:'kbig1', n:'카카오톡 큰 이모티콘 · 540×540', w:540,h:540, pad:0},
+  {k:'kbig2', n:'카카오톡 큰 이모티콘 가로 · 540×300', w:540,h:300, pad:0},
+  {k:'kbig3', n:'카카오톡 큰 이모티콘 세로 · 300×540', w:300,h:540, pad:0},
+  {k:'ogq',   n:'네이버 OGQ 스티커 · 740×640', w:740,h:640, pad:0, seq:true},
+  {k:'line',  n:'LINE 스티커 · 370×320', w:370,h:320, pad:10, seq:true},
+  {k:'main',  n:'메인 이미지 (OGQ · LINE) · 240×240', w:240,h:240, pad:0, file:'main'},
+  {k:'tab',   n:'탭 이미지 (OGQ · LINE) · 96×74', w:96,h:74, pad:0, file:'tab'},
+  {k:'custom',n:'직접 입력'}];
+var exLast={target:'',mode:'one',scale:8,trim:false,pad:null,cw:360,ch:360};
 $('#bExport').onclick=function(){
   commitFloat();
   openModal('PNG로 저장 (배경 없음)',
-    '<div class="opt">'+
-    '<label><input type="radio" name="exM" value="one" checked> 지금 그림 하나</label>'+
-    '<label><input type="radio" name="exM" value="dirs"> 4방향 한 줄 (앞·뒤·왼·오)</label>'+
-    '<label><input type="radio" name="exM" value="frames"> 지금 방향의 모든 프레임 한 줄</label>'+
-    '<label><input type="radio" name="exM" value="sheet"> 전체 시트 (줄=방향, 칸=프레임)</label>'+
-    '<label><input type="radio" name="exM" value="each"> 방향·프레임마다 따로 (여러 파일)</label></div>'+
-    '<div class="row" style="margin-top:14px"><label>크기 <select id="exS"><option value="1">1배 (원래 크기)</option><option value="2">2배</option><option value="4">4배</option><option value="8" selected>8배</option><option value="10">10배</option><option value="16">16배</option></select></label></div>'+
+    '<div class="row" style="margin-top:0"><label style="flex:1">규격 <select id="exT" style="flex:1">'+TARGETS.map(function(t){ return '<option value="'+t.k+'">'+t.n+'</option>'; }).join('')+'</select></label></div>'+
+    '<div class="row" id="exCustom"><label>가로 <input type="number" id="exCW" min="1" max="4096"></label><label>세로 <input type="number" id="exCH" min="1" max="4096"></label><span class="muted">픽셀</span></div>'+
+    '<div class="sub">무엇을 저장할까요</div>'+
+    '<div class="opt" style="margin-top:4px">'+
+    '<label><input type="radio" name="exM" value="one"> 지금 그림 하나</label>'+
+    '<label><input type="radio" name="exM" value="frameFiles"> 지금 방향의 프레임마다 한 장씩</label>'+
+    '<label><input type="radio" name="exM" value="each"> 모든 방향·프레임 한 장씩</label>'+
+    '<label class="free"><input type="radio" name="exM" value="dirs"> 4방향을 한 장에 (앞·뒤·왼·오)</label>'+
+    '<label class="free"><input type="radio" name="exM" value="frames"> 지금 방향의 프레임을 한 장에</label>'+
+    '<label class="free"><input type="radio" name="exM" value="sheet"> 전체 시트 한 장 (줄=방향, 칸=프레임)</label></div>'+
+    '<div class="note fit">이모티콘 24개를 프레임 24개로 그렸다면 \'프레임마다 한 장씩\'으로 01.png ~ 24.png를 ZIP 하나로 받아요</div>'+
+    '<div class="row free" style="margin-top:12px"><label>배율 <select id="exS"><option value="1">1배 (원래 크기)</option><option value="2">2배</option><option value="4">4배</option><option value="8">8배</option><option value="10">10배</option><option value="16">16배</option></select></label>'+
+    '<label>그림 사이 틈 <select id="exG"><option value="0">없음</option><option value="1">1칸</option><option value="2">2칸</option></select></label></div>'+
+    '<div class="row fit" style="margin-top:12px"><label><input type="checkbox" id="exTrim"> 빈 둘레 잘라내고 꽉 채우기</label><label>여백 <select id="exPad"><option value="0">0px</option><option value="10">10px</option><option value="20">20px</option><option value="30">30px</option></select></label></div>'+
     '<div class="row"><label>배경 <select id="exB"><option value="">투명 (배경 없음)</option><option value="#ffffff">흰색</option><option value="#000000">검정</option><option value="prev">미리보기 배경색</option></select></label></div>'+
-    '<div class="row"><label>그림 사이 틈 <select id="exG"><option value="0">없음</option><option value="1">1칸</option><option value="2">2칸</option></select></label></div>'+
-    '<div class="muted" style="margin-top:4px">숨긴 레이어는 빠져요</div>'+
-    '<div class="prev"><canvas class="px" id="exP"></canvas></div><div class="muted" id="exInfo"></div>',
-    [{t:'닫기'},{t:'내려받기',pri:true,fn:function(){
-      var o=exOpts();
-      if(o.mode==='each'){
-        var list=[]; VIEWS.forEach(function(v){ frames(v.k).forEach(function(_,i){ list.push([v.k,i]); }); });
-        list.forEach(function(it,j){ setTimeout(function(){ var c=buildExport('one',o.scale,o.bg,o.gap,it[0],it[1]); c.toBlob(function(b){ download(b,safeName()+'_'+VNAME[it[0]]+(frames(it[0]).length>1?'_'+(it[1]+1):'')+'.png'); }); },j*250); });
-        return;
-      }
-      var c=buildExport(o.mode,o.scale,o.bg,o.gap);
-      var suf=o.mode==='one'?'_'+VNAME[E.view]+(frames(E.view).length>1?'_'+(E.frame+1):''):o.mode==='dirs'?'_4방향':o.mode==='frames'?'_'+VNAME[E.view]+'_프레임':'_시트';
-      c.toBlob(function(b){ download(b,safeName()+suf+(o.scale>1?'_x'+o.scale:'')+'.png'); });
-    }}]);
-  function upd(){ var o=exOpts(), c=buildExport(o.mode==='each'?'one':o.mode,o.scale,o.bg,o.gap), p=$('#exP');
-    p.width=c.width; p.height=c.height; p.getContext('2d').drawImage(c,0,0); var s=Math.min(1,440/c.width,220/c.height); p.style.width=c.width*s+'px'; p.style.height=c.height*s+'px';
-    $('#exInfo').textContent=c.width+'×'+c.height+' 픽셀'; }
-  $$('#mbox input, #mbox select').forEach(function(n){ n.onchange=upd; }); upd();
+    '<div class="prev"><canvas class="px" id="exP"></canvas></div><div class="note" id="exInfo"></div>',
+    [{t:'닫기'},{t:'내려받기',pri:true,fn:function(){ doExport(exOpts()); }}]);
+  $('#exT').value=exLast.target; $('#exS').value=exLast.scale; $('#exTrim').checked=exLast.trim; $('#exCW').value=exLast.cw; $('#exCH').value=exLast.ch;
+  var r=document.querySelector('input[name=exM][value='+exLast.mode+']'); (r||document.querySelector('input[name=exM]')).checked=true;
+  function upd(ev){
+    var t=curTarget();
+    if(ev&&ev.target&&ev.target.id==='exT') $('#exPad').value=t&&t.pad!=null?t.pad:0;
+    $('#exCustom').style.display=$('#exT').value==='custom'?'':'none';
+    $$('#mbox .free').forEach(function(n){ n.style.display=t?'none':''; });
+    $$('#mbox .fit').forEach(function(n){ n.style.display=t?'':'none'; });
+    var m=document.querySelector('input[name=exM]:checked'); if(t&&m&&m.closest('.free')) document.querySelector('input[name=exM][value=one]').checked=true;
+    var o=exOpts(), jobs=exportJobs(o), c=jobs[0].canvas, p=$('#exP');
+    p.width=c.width; p.height=c.height; var k=p.getContext('2d'); k.clearRect(0,0,c.width,c.height); k.drawImage(c,0,0);
+    var sc=Math.min(1,440/c.width,220/c.height); p.style.width=c.width*sc+'px'; p.style.height=c.height*sc+'px';
+    $('#exInfo').innerHTML=c.width+'×'+c.height+' 픽셀'+(jobs.length>1?' · '+jobs.length+'장 (ZIP 하나로 받아요)':'')+(jobs.info?' · '+jobs.info:'')+
+      (jobs.length>1?'<br>파일 이름: '+jobs.slice(0,3).map(function(j){ return j.name; }).join(', ')+(jobs.length>3?' …':''):'');
+    exLast={target:$('#exT').value,mode:o.mode,scale:o.scale,trim:o.trim,cw:+$('#exCW').value||360,ch:+$('#exCH').value||360};
+  }
+  $$('#mbox input, #mbox select').forEach(function(n){ n.onchange=upd; n.oninput=upd; });
+  $('#exPad').value=(curTarget()&&curTarget().pad)||0; upd();
 };
-function exOpts(){ var b=$('#exB').value; return {mode:$('input[name=exM]:checked').value, scale:+$('#exS').value, bg:b==='prev'?(E.pvBg==='check'?'':E.pvBg):b, gap:+$('#exG').value}; }
+function curTarget(){
+  var k=$('#exT').value; if(!k) return null;
+  if(k==='custom') return {k:'custom',w:clamp(+$('#exCW').value|0,1,4096),h:clamp(+$('#exCH').value|0,1,4096),pad:0};
+  for(var i=0;i<TARGETS.length;i++) if(TARGETS[i].k===k) return TARGETS[i];
+  return null;
+}
+function exOpts(){ var b=$('#exB').value; return {target:curTarget(), mode:$('input[name=exM]:checked').value, scale:+$('#exS').value,
+  bg:b==='prev'?(E.pvBg==='check'?'':E.pvBg):b, gap:+$('#exG').value, trim:$('#exTrim').checked, pad:+$('#exPad').value}; }
+function exportItems(mode){
+  if(mode==='frameFiles') return frames(E.view).map(function(_,i){ return [E.view,i]; });
+  if(mode==='each'){ var l=[]; VIEWS.forEach(function(v){ frames(v.k).forEach(function(_,i){ l.push([v.k,i]); }); }); return l; }
+  return [[E.view,E.frame]];
+}
+function bboxOf(canvases){
+  var x0=1e9,y0=1e9,x1=-1,y1=-1;
+  canvases.forEach(function(c){ var d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
+    for(var y=0;y<c.height;y++) for(var x=0;x<c.width;x++) if(d[(y*c.width+x)*4+3]){ if(x<x0)x0=x; if(y<y0)y0=y; if(x>x1)x1=x; if(y>y1)y1=y; } });
+  return x1<0?{x:0,y:0,w:P.w,h:P.h}:{x:x0,y:y0,w:x1-x0+1,h:y1-y0+1};
+}
+// 저장할 그림들 → [{canvas, name}]
+function exportJobs(o){
+  var t=o.target, base=safeName();
+  if(!t){
+    if(o.mode==='dirs'||o.mode==='frames'||o.mode==='sheet'||o.mode==='one'){
+      var suf=o.mode==='one'?'_'+VNAME[E.view]+(frames(E.view).length>1?'_'+(E.frame+1):''):o.mode==='dirs'?'_4방향':o.mode==='frames'?'_'+VNAME[E.view]+'_프레임':'_시트';
+      return [{canvas:buildExport(o.mode,o.scale,o.bg,o.gap),name:base+suf+(o.scale>1?'_x'+o.scale:'')+'.png'}];
+    }
+    return exportItems(o.mode).map(function(it,i){ return {canvas:buildExport('one',o.scale,o.bg,0,it[0],it[1]),name:pad2(i+1)+'.png'}; });
+  }
+  var items=exportItems(o.mode), srcs=items.map(function(it){ return composeCanvas(it[0],it[1]); });
+  var bb=o.trim?bboxOf(srcs):{x:0,y:0,w:P.w,h:P.h};                // 여러 장이면 모두 같은 배율이 되도록 합친 범위로
+  var aw=Math.max(1,t.w-2*o.pad), ah=Math.max(1,t.h-2*o.pad), f=Math.min(aw/bb.w,ah/bb.h), fi=Math.floor(f), sc=fi>=1?fi:f;
+  var dw=Math.round(bb.w*sc), dh=Math.round(bb.h*sc), dx=Math.floor((t.w-dw)/2), dy=Math.floor((t.h-dh)/2);
+  var jobs=srcs.map(function(src,i){
+    var c=document.createElement('canvas'); c.width=t.w; c.height=t.h; var k=c.getContext('2d'); k.imageSmoothingEnabled=false;
+    if(o.bg){ k.fillStyle=o.bg; k.fillRect(0,0,t.w,t.h); }
+    k.drawImage(src,bb.x,bb.y,bb.w,bb.h,dx,dy,dw,dh);
+    var nm=srcs.length>1?pad2(i+1)+'.png':(t.file?t.file+'.png':(t.seq?'01.png':base+'_'+t.w+'x'+t.h+'.png'));
+    return {canvas:c,name:nm};
+  });
+  jobs.info=fi>=1?'그림을 '+fi+'배로 키웠어요':'⚠ 그림이 규격보다 커서 줄였어요 (선이 흐려질 수 있어요)';
+  return jobs;
+}
+function pad2(n){ return (n<10?'0':'')+n; }
+function canvasBytes(c){ return new Promise(function(res){ c.toBlob(function(b){ b.arrayBuffer().then(function(a){ res(new Uint8Array(a)); }); },'image/png'); }); }
+function doExport(o){
+  var jobs=exportJobs(o);
+  if(jobs.length===1){ jobs[0].canvas.toBlob(function(b){ download(b,jobs[0].name); }); return; }
+  Promise.all(jobs.map(function(j){ return canvasBytes(j.canvas); })).then(function(datas){
+    var zipName=safeName()+(o.target?'_'+o.target.w+'x'+o.target.h:'')+'.zip';
+    download(makeZip(jobs.map(function(j,i){ return {name:j.name,data:datas[i]}; })),zipName);
+    toast(jobs.length+'장을 ZIP 하나로 저장했어요');
+  });
+}
+// ZIP (압축 없이 묶기)
+var CRC_T=(function(){ var t=new Uint32Array(256); for(var n=0;n<256;n++){ var c=n; for(var k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(u){ var c=0xFFFFFFFF; for(var i=0;i<u.length;i++) c=CRC_T[(c^u[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function makeZip(files){
+  var enc=new TextEncoder(), parts=[], central=[], off=0, csize=0;
+  files.forEach(function(f){
+    var nm=enc.encode(f.name), crc=crc32(f.data), n=f.data.length, L=new DataView(new ArrayBuffer(30)), C=new DataView(new ArrayBuffer(46));
+    L.setUint32(0,0x04034b50,true); L.setUint16(4,20,true); L.setUint16(6,0x0800,true); L.setUint16(12,0x21,true);
+    L.setUint32(14,crc,true); L.setUint32(18,n,true); L.setUint32(22,n,true); L.setUint16(26,nm.length,true);
+    C.setUint32(0,0x02014b50,true); C.setUint16(4,20,true); C.setUint16(6,20,true); C.setUint16(8,0x0800,true); C.setUint16(14,0x21,true);
+    C.setUint32(16,crc,true); C.setUint32(20,n,true); C.setUint32(24,n,true); C.setUint16(28,nm.length,true); C.setUint32(42,off,true);
+    parts.push(L.buffer,nm,f.data); central.push(C.buffer,nm); off+=30+nm.length+n; csize+=46+nm.length;
+  });
+  var D=new DataView(new ArrayBuffer(22)); D.setUint32(0,0x06054b50,true); D.setUint16(8,files.length,true); D.setUint16(10,files.length,true);
+  D.setUint32(12,csize,true); D.setUint32(16,off,true);
+  return new Blob(parts.concat(central,[D.buffer]),{type:'application/zip'});
+}
 function buildExport(mode,scale,bg,gap,vk,fi){
   var cells;
   if(mode==='one') cells=[[[vk||E.view,fi!=null?fi:E.frame]]];
@@ -1674,6 +1782,7 @@ function refreshAll(){
   $('#bUndo').disabled=!undoS.length&&!FL; $('#bRedo').disabled=!redoS.length;
   refreshFrames(); refreshLayers(); sizePreviews(); drawPreviews(); refreshPalette(); requestRender();
   $('#pos').textContent=P.w+' × '+P.h+' · '+E.zoom*100+'%';
+  $('#sizeLbl').textContent=P.w+'×'+P.h;
 }
 var _push=pushUndo; pushUndo=function(en){ _push(en); $('#bUndo').disabled=false; $('#bRedo').disabled=true; };
 
