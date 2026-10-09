@@ -5,9 +5,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#f5f5f8">
-<title>도트 편집기</title>
-<link rel="icon" href="icon-32.png">
+<title>나만의 도트 편집기</title>
+<meta name="description" content="캐릭터·이모티콘을 도트로 그리는 편집기 — 앞·뒤·옆 모습, 레이어, 프레임, 투명 PNG, 카카오톡·OGQ·LINE 규격 저장">
+<link rel="icon" href="icon-32.png" sizes="32x32">
+<link rel="icon" href="icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="도트 편집기">
+<!-- 링크 미리보기 (카카오톡 · 문자 · SNS) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="나만의 도트 편집기">
+<meta property="og:title" content="나만의 도트 편집기">
+<meta property="og:description" content="캐릭터·이모티콘을 도트로 그려요 · 앞·뒤·옆 모습 · 투명 PNG · 카카오톡·OGQ·LINE 규격 저장">
+<meta property="og:url" content="https://han8877.github.io/mydotedit/">
+<meta property="og:image" content="https://han8877.github.io/mydotedit/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://han8877.github.io/mydotedit/og-image.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
   /* 둥근모꼴(NeoDunggeunmo) — SIL OFL 1.1, fonts/neodgm-LICENSE.txt · 글자 도구에서 쓴다 */
@@ -61,8 +79,7 @@
   #top{ grid-area:top; display:flex; align-items:center; gap:6px; padding:0 12px; padding-top:env(safe-area-inset-top,0px);
     background:var(--surface); border-bottom:1px solid var(--border); min-width:0; }
   .brand{ display:flex; align-items:center; gap:8px; margin-right:6px; min-width:0; }
-  .logo{ width:30px; height:30px; border-radius:8px; background:var(--accent); display:grid; place-items:center; flex:none; }
-  .logo svg{ width:18px; height:18px; image-rendering:pixelated; }
+  .logo{ width:32px; height:32px; border-radius:8px; flex:none; image-rendering:pixelated; }
   #projName{ width:140px; min-width:60px; border:1px solid transparent; background:transparent; border-radius:7px; padding:5px 8px; font-weight:650; font-size:14px; }
   #projName:hover{ background:var(--surface2); }
   #projName:focus{ outline:none; border-color:var(--accent); background:var(--surface); }
@@ -325,7 +342,7 @@
 <div id="app">
   <header id="top">
     <div class="brand">
-      <div class="logo"><svg viewBox="0 0 8 8" shape-rendering="crispEdges"><path fill="#fff" d="M1 2h2v1H1zM5 2h2v1H5zM0 3h8v2H0zM1 5h6v1H1zM2 6h4v1H2zM3 7h2v1H3z"/></svg></div>
+      <img class="logo" src="icon-192.png" alt="">
       <input id="projName" type="text" title="캐릭터 이름 (저장 파일 이름)" spellcheck="false">
     </div>
     <span class="vsep"></span>

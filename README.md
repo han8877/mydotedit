@@ -23,4 +23,6 @@ https://han8877.github.io/mydotedit/
 |---|---|
 | `index.html` | 편집기 전부 |
 | `fonts/` | 둥근모꼴 (SIL OFL 1.1, `fonts/neodgm-LICENSE.txt`) |
-| `icon-32.png`, `icon-180.png` | 아이콘 |
+| `icon-*.png` | 아이콘 (탭 · 홈 화면 · 앱 설치) |
+| `og-image.png` | 링크 미리보기 그림 (1200×630) |
+| `manifest.webmanifest` | 홈 화면에 추가 · 앱으로 설치 설정 |
