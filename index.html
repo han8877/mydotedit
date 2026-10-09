@@ -698,11 +698,11 @@ function render(){
 function snap(){
   var views={};
   VIEWS.forEach(function(v){ views[v.k]={frames:P.views[v.k].frames.map(function(f){ var o={}; for(var k in f) o[k]=f[k].slice(); return o; })}; });
-  return { w:P.w, h:P.h, name:P.name, mirrorRight:P.mirrorRight, nextId:P.nextId,
+  return { w:P.w, h:P.h, emo:P.emo||null, name:P.name, mirrorRight:P.mirrorRight, nextId:P.nextId,
     layers:P.layers.map(function(l){ return Object.assign({},l); }), views:views, ed:{view:E.view,frame:E.frame,layer:E.layer} };
 }
 function restore(s){
-  var ref=P.ref, ow=P.w, oh=P.h, c=JSON.parse(JSON.stringify({w:s.w,h:s.h,name:s.name,mirrorRight:s.mirrorRight,nextId:s.nextId,layers:s.layers}));
+  var ref=P.ref, ow=P.w, oh=P.h, c=JSON.parse(JSON.stringify({w:s.w,h:s.h,emo:s.emo||null,name:s.name,mirrorRight:s.mirrorRight,nextId:s.nextId,layers:s.layers}));
   c.views={}; VIEWS.forEach(function(v){ c.views[v.k]={frames:s.views[v.k].frames.map(function(f){ var o={}; for(var k in f) o[k]=f[k].slice(); return o; })}; });
   c.ref=ref; P=c; E.view=s.ed.view; E.frame=s.ed.frame; E.layer=s.ed.layer; fixEd();
   if(P.w!==ow||P.h!==oh){ sel=null; sizeChanged(); }
@@ -1019,12 +1019,12 @@ function isEmpty(b){ for(var i=3;i<b.length;i+=4) if(b[i]) return false; return 
 function serialize(withRef){
   var views={};
   VIEWS.forEach(function(v){ views[v.k]={frames:P.views[v.k].frames.map(function(f){ var o={}; for(var k in f) o[k]=isEmpty(f[k])?0:b64(f[k]); return o; })}; });
-  return { app:'kkk-dot', v:1, w:P.w, h:P.h, name:P.name, mirrorRight:P.mirrorRight, nextId:P.nextId, layers:P.layers,
+  return { app:'kkk-dot', v:1, w:P.w, h:P.h, emo:P.emo||null, name:P.name, mirrorRight:P.mirrorRight, nextId:P.nextId, layers:P.layers,
     views:views, ref:withRef!==false?(P.ref||null):null, ed:{view:E.view,frame:E.frame,layer:E.layer} };
 }
 function deserialize(o){
   if(!o||o.app!=='kkk-dot'||!o.w||!o.h||!o.layers||!o.views) throw new Error('도트 편집기 작업 파일이 아니에요');
-  var n=o.w*o.h*4, np={ w:o.w, h:o.h, name:o.name||'내 캐릭터', mirrorRight:!!o.mirrorRight, nextId:o.nextId||1, layers:o.layers, views:{}, ref:o.ref||null };
+  var n=o.w*o.h*4, np={ w:o.w, h:o.h, emo:o.emo||null, name:o.name||'내 캐릭터', mirrorRight:!!o.mirrorRight, nextId:o.nextId||1, layers:o.layers, views:{}, ref:o.ref||null };
   VIEWS.forEach(function(v){
     var src=o.views[v.k]&&o.views[v.k].frames||[{}];
     np.views[v.k]={frames:src.map(function(f){ var r={}; np.layers.forEach(function(l){ r[l.id]=f[l.id]?unb64(f[l.id],n):new Uint8ClampedArray(n); }); return r; })};
@@ -1477,12 +1477,20 @@ function sizeButtons(){
   h+='<div class="sub" style="margin-top:16px">이모티콘용 크기 <span class="muted" style="font-weight:500">PNG 저장 때 규격 크기로 선명하게 키워져요</span></div>';
   EMO_SIZES.forEach(function(g){
     h+='<div class="note" style="margin-top:10px;color:var(--text2);font-weight:600">'+g[0]+'</div><div class="row tight">'+
-      g[1].map(function(s){ return '<button class="btn sm" data-sz="'+s[0]+'x'+s[1]+'" title="'+s[2]+'×'+s[3]+'로 저장 ('+Math.round(s[2]/s[0])+'배)">'+s[0]+'×'+s[1]+' <span class="muted">→ '+s[2]+'×'+s[3]+'</span></button>'; }).join('')+'</div>';
+      g[1].map(function(s){ return '<button class="btn sm" data-sz="'+s[0]+'x'+s[1]+'" data-emo="'+s[2]+'x'+s[3]+'" title="'+s[2]+'×'+s[3]+'로 저장 ('+Math.round(s[2]/s[0])+'배)">'+s[0]+'×'+s[1]+' <span class="muted">→ '+s[2]+'×'+s[3]+'</span></button>'; }).join('')+'</div>';
   });
   return h;
 }
-function hookSizeButtons(){ $$('#mbox [data-sz]').forEach(function(b){ b.onclick=function(){ var p=b.dataset.sz.split('x'); $('#szW').value=p[0]; $('#szH').value=p[1];
-  $$('#mbox [data-sz]').forEach(function(x){ x.classList.toggle('on',x===b); }); }; }); }
+// 고른 이모티콘 규격을 기억했다가 PNG 저장 때 그 크기로 맞춘다
+var pendEmo=null, pendSz='';
+function hookSizeButtons(){
+  pendEmo=P&&P.emo||null; pendSz=P?P.w+'x'+P.h:'';
+  $$('#mbox [data-sz]').forEach(function(b){ b.onclick=function(){ var p=b.dataset.sz.split('x'); $('#szW').value=p[0]; $('#szH').value=p[1];
+    pendEmo=b.dataset.emo||null; pendSz=b.dataset.sz;
+    $$('#mbox [data-sz]').forEach(function(x){ x.classList.toggle('on',x===b); }); }; });
+  ['#szW','#szH'].forEach(function(id){ $(id).addEventListener('input',function(){ if($('#szW').value+'x'+$('#szH').value!==pendSz){ pendEmo=null; $$('#mbox [data-sz]').forEach(function(x){ x.classList.remove('on'); }); } }); });
+}
+function takeEmo(w,h){ return pendEmo&&pendSz===w+'x'+h?pendEmo:null; }
 $('#bNew').onclick=function(){
   openModal('새로 만들기',
     '<p class="muted">지금 작업은 사라져요. 필요하면 먼저 \'작업 저장\'을 눌러 주세요.</p>'+
@@ -1491,7 +1499,7 @@ $('#bNew').onclick=function(){
     '<div class="row"><label>이름 <input type="text" id="szN" value="내 캐릭터"></label></div>',
     [{t:'취소'},{t:'만들기',pri:true,fn:function(){
       var w=clamp(+$('#szW').value|0,1,256), h=clamp(+$('#szH').value|0,1,256);
-      newProject(w,h,$('#szN').value.trim()||'내 캐릭터'); sizeChanged(); changed(); refreshAll();
+      var emo=takeEmo(w,h); newProject(w,h,$('#szN').value.trim()||'내 캐릭터'); P.emo=emo; sizeChanged(); changed(); refreshAll();
     }}]);
   hookSizeButtons();
 };
@@ -1503,13 +1511,14 @@ $('#bResize').onclick=function(){
     '<div class="row" style="align-items:flex-start"><span class="muted">그림 기준 위치</span><div class="anchor" id="anc">'+[0,1,2,3,4,5,6,7,8].map(function(i){ return '<button class="btn" data-a="'+i+'"></button>'; }).join('')+'</div></div>'+
     '<p class="muted">모든 방향·프레임·레이어에 적용돼요. 작아지면 잘리는 부분은 사라져요.</p>',
     [{t:'취소'},{t:'바꾸기',pri:true,fn:function(){
-      var nw=clamp(+$('#szW').value|0,1,256), nh=clamp(+$('#szH').value|0,1,256); if(nw===P.w&&nh===P.h) return;
+      var nw=clamp(+$('#szW').value|0,1,256), nh=clamp(+$('#szH').value|0,1,256), emo=takeEmo(nw,nh);
+      if(nw===P.w&&nh===P.h){ if(emo!==(P.emo||null)){ P.emo=emo; changed(); refreshAll(); } return; }
       structural(function(){
         var ax=anchor%3, ay=Math.floor(anchor/3), dx=ax===0?0:ax===1?Math.floor((nw-P.w)/2):nw-P.w, dy=ay===0?0:ay===1?Math.floor((nh-P.h)/2):nh-P.h, ow=P.w, oh=P.h;
         forEachFrame(function(f){ for(var id in f){ var b=f[id], o=new Uint8ClampedArray(nw*nh*4);
           for(var y=0;y<oh;y++) for(var x=0;x<ow;x++){ var tx=x+dx, ty=y+dy; if(tx<0||ty<0||tx>=nw||ty>=nh) continue; var si=(y*ow+x)*4, di=(ty*nw+tx)*4; o[di]=b[si]; o[di+1]=b[si+1]; o[di+2]=b[si+2]; o[di+3]=b[si+3]; }
           f[id]=o; } });
-        P.w=nw; P.h=nh; sel=null; sizeChanged();
+        P.w=nw; P.h=nh; P.emo=emo; sel=null; sizeChanged();
       });
     }}]);
   hookSizeButtons();
@@ -1599,7 +1608,10 @@ $('#bExport').onclick=function(){
     '<div class="row"><label>배경 <select id="exB"><option value="">투명 (배경 없음)</option><option value="#ffffff">흰색</option><option value="#000000">검정</option><option value="prev">미리보기 배경색</option></select></label></div>'+
     '<div class="prev"><canvas class="px" id="exP"></canvas></div><div class="note" id="exInfo"></div>',
     [{t:'닫기'},{t:'내려받기',pri:true,fn:function(){ doExport(exOpts()); }}]);
-  $('#exT').value=exLast.target; $('#exS').value=exLast.scale; $('#exTrim').checked=exLast.trim; $('#exCW').value=exLast.cw; $('#exCH').value=exLast.ch;
+  $('#exT').value=exLast.target;
+  if(P.emo){ var ed=P.emo.split('x').map(Number), hit=TARGETS.filter(function(t){ return t.w===ed[0]&&t.h===ed[1]; })[0];
+    if(hit) $('#exT').value=hit.k; else { $('#exT').value='custom'; exLast.cw=ed[0]; exLast.ch=ed[1]; } }
+  $('#exS').value=exLast.scale; $('#exTrim').checked=exLast.trim; $('#exCW').value=exLast.cw; $('#exCH').value=exLast.ch;
   var r=document.querySelector('input[name=exM][value='+exLast.mode+']'); (r||document.querySelector('input[name=exM]')).checked=true;
   function upd(ev){
     var t=curTarget();
@@ -1785,7 +1797,7 @@ function refreshAll(){
   $('#bUndo').disabled=!undoS.length&&!FL; $('#bRedo').disabled=!redoS.length;
   refreshFrames(); refreshLayers(); sizePreviews(); drawPreviews(); refreshPalette(); requestRender();
   $('#pos').textContent=P.w+' × '+P.h+' · '+E.zoom*100+'%';
-  $('#sizeLbl').textContent=P.w+'×'+P.h;
+  $('#sizeLbl').textContent=P.w+'×'+P.h+(P.emo?' → '+P.emo.replace('x','×'):'');
 }
 var _push=pushUndo; pushUndo=function(en){ _push(en); $('#bUndo').disabled=false; $('#bRedo').disabled=true; };
 
