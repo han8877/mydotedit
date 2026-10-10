@@ -276,6 +276,8 @@
   .keys td{ padding:7px 6px; border-bottom:1px solid var(--border); vertical-align:top; }
   .keys td:first-child{ white-space:nowrap; color:var(--text2); }
   kbd{ font:600 11px ui-monospace, SFMono-Regular, Menlo, monospace; background:var(--surface2); border:1px solid var(--border); border-bottom-width:2px; border-radius:5px; padding:1px 5px; }
+  body.dropping #wrap{ box-shadow:inset 0 0 0 3px var(--accent); }
+  body.dropping #wrap:after{ content:'여기에 놓으면 열어요'; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); background:var(--accent); color:#fff; padding:10px 16px; border-radius:10px; font-weight:650; pointer-events:none; }
   #toast{ position:fixed; left:50%; bottom:96px; transform:translate(-50%,8px); background:#1d1d22; color:#fff; padding:10px 16px; border-radius:10px; z-index:60;
     opacity:0; transition:opacity .2s, transform .2s; pointer-events:none; max-width:min(92%,520px); text-align:center; box-shadow:var(--shadow-lg); font-weight:550; }
   #toast.show{ opacity:1; transform:translate(-50%,0); }
@@ -359,7 +361,7 @@
     <span class="spacer"></span>
     <span id="saved"></span>
     <button class="btn ghost" id="bNew" title="새로 만들기"><svg class="i"><use href="#i-new"/></svg><span class="lbl-m">새로</span></button>
-    <button class="btn ghost" id="bOpen" title="불러오기 (작업 파일 · 그림)"><svg class="i"><use href="#i-folder"/></svg><span class="lbl-m">불러오기</span></button>
+    <button class="btn ghost" id="bOpen" title="불러오기 · 그림을 열어서 고치기 (끌어다 놓기 · 붙여넣기도 돼요)"><svg class="i"><use href="#i-folder"/></svg><span class="lbl-m">불러오기</span></button>
     <button class="btn ghost" id="bSave" title="작업 파일(.json)로 저장 (Ctrl+S)"><svg class="i"><use href="#i-save"/></svg><span class="lbl-m">작업 저장</span></button>
     <button class="btn ghost" id="bRef" title="밑그림 (이미지를 깔고 따라 그리기)"><svg class="i"><use href="#i-image"/></svg><span class="lbl-m">밑그림</span></button>
     <button class="btn ghost" id="bResize" title="캔버스 크기 보기 · 바꾸기"><svg class="i"><use href="#i-resize"/></svg><span id="sizeLbl">크기</span></button>
@@ -1569,42 +1571,115 @@ $('#bResize').onclick=function(){
 
 // 불러오기
 $('#bOpen').onclick=function(){ $('#fileIn').click(); };
-$('#fileIn').onchange=function(){
-  var f=this.files[0]; this.value=''; if(!f) return;
-  if(/\.json$/i.test(f.name)||f.type==='application/json'){
-    var r=new FileReader(); r.onload=function(){ try{ commitFloat(); deserialize(JSON.parse(r.result)); idbSet('ref',P.ref||null); changed(); toast('불러왔어요'); }catch(e){ alert('불러오지 못했어요: '+e.message); } }; r.readAsText(f);
-    return;
-  }
-  readImage(f,function(url,img){ imageDialog(url,img,f.name); });
-};
+$('#fileIn').onchange=function(){ var f=this.files[0]; this.value=''; openFile(f); };
 function readImage(f,cb){ var r=new FileReader(); r.onload=function(){ var im=new Image(); im.onload=function(){ cb(r.result,im); }; im.onerror=function(){ alert('그림 파일을 읽지 못했어요'); }; im.src=r.result; }; r.readAsDataURL(f); }
 function imageToBuf(img,w,h){ var c=document.createElement('canvas'); c.width=w; c.height=h; var k=c.getContext('2d'); k.imageSmoothingEnabled=false; k.drawImage(img,0,0,w,h); return k.getImageData(0,0,w,h).data; }
+// 그림 불러오기 — 열어서 고치기 · 붙여넣기 · 4방향 나누기 · 밑그림
+function gcd(a,b){ while(b){ var t=a%b; a=b; b=t; } return a; }
+function imgPixels(img){ var b=imageToBuf(img,img.width,img.height); return new Uint8ClampedArray(b); }
+// 몇 배로 키워 저장된 도트 그림인지 알아낸다 (모든 색 경계가 k칸마다 있으면 k배)
+function detectScale(px,w,h){
+  if(w*h>4096*4096) return 1;
+  var d=new Uint32Array(px.buffer.slice(0)); for(var i=0;i<d.length;i++) if(!px[i*4+3]) d[i]=0;
+  var g=gcd(w,h), x, y;
+  for(y=0;y<h&&g>1;y++){ var row=y*w; for(x=1;x<w;x++) if(d[row+x]!==d[row+x-1]){ g=gcd(g,x); if(g===1) break; } }
+  for(x=0;x<w&&g>1;x++) for(y=1;y<h;y++) if(d[y*w+x]!==d[(y-1)*w+x]){ g=gcd(g,y); if(g===1) break; }
+  return (w/g<2||h/g<2)?1:g;
+}
+// 고르게 줄이기 (반씩 줄여 가며 평균)
+function smoothResize(img,tw,th){
+  var c=document.createElement('canvas'); c.width=img.width; c.height=img.height; c.getContext('2d').drawImage(img,0,0);
+  while(c.width/2>=tw&&c.height/2>=th&&c.width>2){ var h=document.createElement('canvas'); h.width=Math.max(1,c.width>>1); h.height=Math.max(1,c.height>>1);
+    var hk=h.getContext('2d'); hk.imageSmoothingEnabled=true; hk.imageSmoothingQuality='high'; hk.drawImage(c,0,0,h.width,h.height); c=h; }
+  var o=document.createElement('canvas'); o.width=tw; o.height=th; var ok=o.getContext('2d'); ok.imageSmoothingEnabled=true; ok.imageSmoothingQuality='high';
+  ok.drawImage(c,0,0,tw,th); return ok.getImageData(0,0,tw,th).data;
+}
 function imageDialog(url,img,fname){
-  var iw=img.width, ih=img.height, fitS=Math.min(1,P.w/iw,P.h/ih);
-  openModal('그림 불러오기 ('+iw+'×'+ih+')',
-    '<div class="prev"><img src="'+url+'" style="image-rendering:pixelated;max-width:100%;max-height:200px;width:'+Math.min(iw*4,440)+'px"></div>'+
-    '<div class="row"><label><input type="radio" name="imM" value="layer" checked> 지금 레이어에 붙여넣기'+(fitS<1?' (캔버스에 맞게 줄여요)':'')+'</label></div>'+
-    '<div class="row"><label><input type="radio" name="imM" value="new"'+(iw>256||ih>256?' disabled':'')+'> 이 그림 크기('+iw+'×'+ih+')로 새로 만들기</label></div>'+
-    '<div class="row"><label><input type="radio" name="imM" value="sheet"> 4방향 한 줄 그림(앞·뒤·왼·오)으로 나눠 새로 만들기</label></div>'+
-    '<div class="row"><label><input type="radio" name="imM" value="ref"> 밑그림으로 깔기 (따라 그리기)</label></div>',
-    [{t:'취소'},{t:'확인',pri:true,fn:function(){
+  var pvS=Math.min(440/img.width,180/img.height,8);
+  var iw=img.width, ih=img.height, px=imgPixels(img), k=detectScale(px,iw,ih), fitS=Math.min(1,P.w/iw,P.h/ih);
+  var nm=(fname||'그림').replace(/\.[^.]+$/,'');
+  // 단순한 그림은 실제보다 큰 배율로 보일 수 있어 약수 중에서 고르게 한다 (기본: 흔한 저장 배율 중 가장 큰 것)
+  var divs=[]; for(var dd=k;dd>=2;dd--) if(k%dd===0) divs.push(dd);
+  var kDef=k; if(k>16){ var typ=[16,12,10,8,6,5,4,3,2]; for(var ti=0;ti<typ.length;ti++) if(k%typ[ti]===0){ kDef=typ[ti]; break; } }
+  openModal('그림 불러오기 <span class="muted" style="font-weight:500">'+iw+'×'+ih+'</span>',
+    '<div class="prev"><img src="'+url+'" style="image-rendering:pixelated;max-width:100%;width:'+Math.round(iw*pvS)+'px;height:'+Math.round(ih*pvS)+'px"></div>'+
+    '<div class="opt" style="margin-top:10px">'+
+    '<label><input type="radio" name="imM" value="open" checked> <b>이 그림을 열어서 고치기</b></label>'+
+    '<div id="imOpen" style="padding:2px 10px 8px 32px">'+
+      (k>1?'<div class="row tight"><label class="tgl"><input type="checkbox" id="imRestore" checked> 키워 저장된 도트 그림이에요 → 원래 칸 크기로 열기</label>'+
+        '<select id="imK">'+divs.map(function(d){ return '<option value="'+d+'"'+(d===kDef?' selected':'')+'>'+d+'배 → '+(iw/d)+'×'+(ih/d)+'</option>'; }).join('')+'</select></div>':'')+
+      '<div id="imBig" class="row tight"><span class="muted">너무 커서 줄여 열어요 · 긴 변</span><select id="imMax"><option>32</option><option>48</option><option selected>64</option><option>96</option><option>128</option><option>192</option><option>256</option></select>'+
+        '<select id="imCols"><option value="0">색 그대로</option><option value="32">32색</option><option value="16">16색</option><option value="8">8색</option></select></div>'+
+      '<label class="tgl" id="imOrigL" style="margin-top:6px"><input type="checkbox" id="imOrig" checked> PNG 저장 때 원래 크기('+iw+'×'+ih+')로</label>'+
+      '<div class="note" id="imInfo"></div></div>'+
+    '<label><input type="radio" name="imM" value="layer"> 지금 그림의 레이어에 붙여넣기'+(fitS<1?' <span class="muted">(캔버스에 맞게 줄여요)</span>':'')+'</label>'+
+    '<label><input type="radio" name="imM" value="sheet"> 4방향 한 줄 그림(앞·뒤·왼·오)으로 나눠 열기</label>'+
+    '<label><input type="radio" name="imM" value="ref"> 밑그림으로 깔기 (따라 그리기)</label></div>',
+    [{t:'취소'},{t:'열기',pri:true,fn:function(){
       var m=$('input[name=imM]:checked').value;
       if(m==='ref'){ setRef(url); return; }
-      if(m==='new'||m==='sheet'){
-        var w=m==='sheet'?Math.floor(iw/4):iw; if(w<1||w>256||ih>256){ alert('크기가 맞지 않아요'); return false; }
-        newProject(w,ih,fname.replace(/\.[^.]+$/,'')); P.layers=[P.layers[0]]; P.layers[0].name='그림';
-        VIEWS.forEach(function(v){ P.views[v.k]={frames:[newFrame()]}; });
-        var all=imageToBuf(img,iw,ih);
-        (m==='sheet'?VIEWS:[VIEWS[0]]).forEach(function(v,vi){ var b=P.views[v.k].frames[0][P.layers[0].id];
-          for(var y=0;y<ih;y++) for(var x=0;x<w;x++){ var si=(y*iw+x+vi*w)*4, di=(y*w+x)*4; for(var j=0;j<4;j++) b[di+j]=all[si+j]; } });
-        if(m==='sheet') P.mirrorRight=false;
-        E.layer=P.layers[0].id; sizeChanged(); changed(); refreshAll(); return;
+      if(m==='layer'){
+        if(!canEdit()) return false;
+        var w2=Math.max(1,Math.round(iw*fitS)), h2=Math.max(1,Math.round(ih*fitS)), buf=new Uint8ClampedArray(imageToBuf(img,w2,h2));
+        floatNew(buf,w2,h2,Math.floor((P.w-w2)/2),Math.floor((P.h-h2)/2)); setTool('select'); toast('끌어서 옮기고 Enter로 찍어요'); return;
       }
-      if(!canEdit()) return;
-      var w2=Math.max(1,Math.round(iw*fitS)), h2=Math.max(1,Math.round(ih*fitS)), buf=new Uint8ClampedArray(imageToBuf(img,w2,h2));
-      floatNew(buf,w2,h2,Math.floor((P.w-w2)/2),Math.floor((P.h-h2)/2)); setTool('select'); toast('끌어서 옮기고 Enter로 찍어요');
+      var r=plan(); if(m==='sheet'&&r.w<4){ alert('4방향으로 나누기엔 너무 좁아요'); return false; }
+      var base=r.buf, bw=r.w, bh=r.h, w=m==='sheet'?Math.floor(bw/4):bw;
+      if(w>256||bh>256){ alert('256칸보다 커서 열 수 없어요. 줄여 열기 크기를 낮춰 주세요'); return false; }
+      commitFloat(); newProject(w,bh,nm); P.layers=[P.layers[0]]; P.layers[0].name='그림';
+      VIEWS.forEach(function(v){ P.views[v.k]={frames:[newFrame()]}; });
+      (m==='sheet'?VIEWS:[VIEWS[0]]).forEach(function(v,vi){ var b=P.views[v.k].frames[0][P.layers[0].id];
+        for(var y=0;y<bh;y++) for(var x=0;x<w;x++){ var si=(y*bw+x+vi*w)*4, di=(y*w+x)*4; for(var j=0;j<4;j++) b[di+j]=base[si+j]; } });
+      if(m==='sheet') P.mirrorRight=false;
+      var sc=iw/bw; P.emo=(m==='open'&&r.exact&&$('#imOrig').checked&&sc>1)?iw+'x'+ih:null;
+      E.layer=P.layers[0].id; sizeChanged(); changed(); refreshAll();
+      toast(w+'×'+bh+' 칸으로 열었어요'+(P.emo?' · PNG 저장은 '+iw+'×'+ih+'로':''));
     }}]);
+  // 열 크기 계산
+  function plan(){
+    var restore=k>1&&$('#imRestore')&&$('#imRestore').checked, kk=restore?+$('#imK').value:1, bw=iw/kk, bh=ih/kk, buf, exact=true;
+    if(Math.max(bw,bh)>256){
+      var mx=+$('#imMax').value, s=mx/Math.max(bw,bh), tw=Math.max(1,Math.round(bw*s)), th=Math.max(1,Math.round(bh*s));
+      buf=new Uint8ClampedArray(smoothResize(img,tw,th)); exact=false;
+      var idx=[], cols=[]; for(var i=0;i<buf.length;i+=4){ if(buf[i+3]<128){ buf[i+3]=0; continue; } buf[i+3]=255; idx.push(i); cols.push([buf[i],buf[i+1],buf[i+2]]); }
+      var n=+$('#imCols').value; if(n>0&&cols.length){ cols=kmeans(cols,n); idx.forEach(function(p,j){ buf[p]=cols[j][0]; buf[p+1]=cols[j][1]; buf[p+2]=cols[j][2]; }); }
+      bw=tw; bh=th;
+    } else if(restore){
+      buf=new Uint8ClampedArray(bw*bh*4); var o=Math.floor(kk/2);
+      for(var y=0;y<bh;y++) for(var x=0;x<bw;x++){ var si=((y*kk+o)*iw+x*kk+o)*4, di=(y*bw+x)*4; for(var j=0;j<4;j++) buf[di+j]=px[si+j]; }
+    } else buf=px;
+    return {buf:buf,w:bw,h:bh,exact:exact};
+  }
+  function upd(){
+    var open=$('input[name=imM]:checked').value; $('#imOpen').style.display=(open==='open'||open==='sheet')?'':'none';
+    var restore=k>1&&$('#imRestore')&&$('#imRestore').checked, kk=restore?+$('#imK').value:1, bw=iw/kk, bh=ih/kk, big=Math.max(bw,bh)>256;
+    if($('#imK')) $('#imK').disabled=!restore;
+    $('#imBig').style.display=big?'':'none'; $('#imOrigL').style.display=(!big&&restore)?'':'none';
+    var s=big?(+$('#imMax').value)/Math.max(bw,bh):1;
+    $('#imInfo').textContent=Math.round(bw*s)+'×'+Math.round(bh*s)+' 칸으로 열려요';
+  }
+  $$('#mbox input, #mbox select').forEach(function(n){ n.onchange=upd; }); upd();
 }
+// 끌어다 놓기 · 붙여넣기로도 열기
+function openFile(f){
+  if(!f) return;
+  if(/\.json$/i.test(f.name)||f.type==='application/json'){
+    var r=new FileReader(); r.onload=function(){ try{ commitFloat(); deserialize(JSON.parse(r.result)); idbSet('ref',P.ref||null); changed(); toast('불러왔어요'); }catch(e){ alert('불러오지 못했어요: '+e.message); } }; r.readAsText(f); return;
+  }
+  if(/^image\//.test(f.type)) readImage(f,function(url,img){ imageDialog(url,img,f.name); });
+}
+document.addEventListener('dragover',function(e){ if(e.dataTransfer&&Array.prototype.indexOf.call(e.dataTransfer.types,'Files')>=0){ e.preventDefault(); document.body.classList.add('dropping'); } });
+document.addEventListener('dragleave',function(e){ if(!e.relatedTarget) document.body.classList.remove('dropping'); });
+document.addEventListener('drop',function(e){ document.body.classList.remove('dropping'); if(e.dataTransfer&&e.dataTransfer.files.length){ e.preventDefault(); openFile(e.dataTransfer.files[0]); } });
+document.addEventListener('paste',function(e){
+  var t=e.target; if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA')) return;
+  var items=e.clipboardData&&e.clipboardData.files;
+  if(items&&items.length&&/^image\//.test(items[0].type)){
+    e.preventDefault(); if(Date.now()-lastKeyPaste<400) cancelFloat();   // 방금 키보드로 붙인 조각 대신 바깥 그림을 연다
+    openFile(items[0]); return; }
+  if(!clip&&Date.now()-lastKeyPaste>400&&!$('#modal').classList.contains('show')) toast('복사한 것이 없어요');
+});
+var lastKeyPaste=0;
 
 // 작업 저장
 function download(blob,name){
@@ -1788,7 +1863,7 @@ document.addEventListener('keydown',function(e){
     else if(lk==='y'){ e.preventDefault(); redo(); }
     else if(lk==='c'){ e.preventDefault(); copySel(false); }
     else if(lk==='x'){ e.preventDefault(); copySel(true); }
-    else if(lk==='v'){ e.preventDefault(); paste(); }
+    else if(lk==='v'){ if(clip){ paste(); lastKeyPaste=Date.now(); } }   // 바깥에서 복사한 그림이면 paste 이벤트에서 연다
     else if(lk==='a'){ e.preventDefault(); commitFloat(); sel={x:0,y:0,w:P.w,h:P.h}; setTool('select'); }
     else if(lk==='s'){ e.preventDefault(); saveProject(); }
     else if(lk==='d'){ e.preventDefault(); commitFloat(); sel=null; requestRender(); }
